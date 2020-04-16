@@ -1,0 +1,237 @@
+実現方式検討
+■SQL実行
+Dim cnt As New ADODB.Connection 'コネクションオブジェクト
+Dim cmd As New ADODB.Command 'コマンドオブジェクト
+Dim rst As New ADODB.Recordset 'レコードセットオブジェクト
+'手順 1：コネクションオブジェクトでデータベースへ接続する
+cnt.Open "Provider=IBM DB2 ODBC DRIVER;" & _				★Provider確認Provider=IBMDADB2;
+"DataSource=[スキーマ名];" & _
+"User ID=aaaa;Password=bbbb"
+'手順 2：コマンドオブジェクトで SQL コマンドを作成する
+Set cmd.ActiveConnection = cnt
+cmd.CommandText = "select count(*) from [テーブル名]"
+'手順 3：コマンドを実行し、レコードセットオブジェクトに結果を得る
+rst.Open cmd, , adOpenStatic, adLockOptimistic
+'手順 4：レコードセットオブジェクトでレコードを処理する
+rst.MoveFirst
+Do Until rst.EOF
+MsgBox "カウント：" & rst("count(*)").Value & ":" '& _
+
+rst.MoveNext
+Loop
+rst.Close
+cnt.Close
+
+※ＤＢ２が入っていれば，\SQLLIB\samples\Ado\vb にサンプルがあるかも．
+
+■TTL実行
+-----sample1-----
+Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal Target As Range, Cancel As Boolean)
+''' 変数の宣言 ''''''''''''''''''''''''''''''''''''''''''''
+' Object 設定
+Dim FSO         As Object
+Dim TXT         As Object
+Dim WSH         As Object
+
+' 変数設定
+Dim pFILEDIR    As String       ' 格納先ディレクトリ
+Dim pFILE       As String       ' TeraTerm マクロ用ファイル名
+Dim pFILEPATH   As String
+
+Dim pHOST       As String       ' アクセスするサーバ用変数
+Dim pUSER       As String       ' アクセスユーザ用変数
+
+Dim pPID        As Double
+
+' 列数設定
+Dim nHOST       As Integer      ' アクセス先
+Dim nUSER       As Integer      ' ユーザID
+
+' Tera Term 実行ファイル
+Dim pTTERMDIR   As String       ' インストールフォルダ
+Dim pTTMEXE     As String       ' Tera Term マクロ実行
+Dim pTTMACROPATH As String      ' インストールパス
+
+' マクロファイル格納先
+
+''' 変数の定義 ''''''''''''''''''''''''''''''''''''''''''''
+
+' デフォルト定義
+Set WSH = CreateObject("WScript.Shell")
+pFILEDIR = WSH.SpecialFolders("Desktop")
+
+pFILE = "teratermmacro.ttl"
+pHOST = "localhost"         ' アクセス先(定義だけ)
+pUSER = "default"           ' ユーザID
+
+pFILEPATH = pFILEDIR & "\" & pFILE
+
+' 列の数値定義
+nHOST = 1                   ' アクセス先
+nUSER = 2                   ' ユーザID
+
+pTTERMDIR = "c:\Program Files (x86)\teraterm"
+pTTMEXE = "ttpmacro.exe"
+pTTMACROPATH = pTTERMDIR & "\" & pTTMEXE
+
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+' 強制初期化…
+Cells(1, 1) = "アクセス先サーバ"
+Cells(1, 2) = "ユーザID"
+
+' ダブルクリックしたセルが A 列じゃなかったり、さらに 1 行目だったりしたら、強制終了。
+If Intersect(Target, Range("A:A")) Is Nothing Or Target.Row = 1 Then Exit Sub
+Cancel = True
+
+' セルの色彩情報で、処理を変更
+If Target.Interior.ColorIndex = xlNone Then
+    
+    ' もしアクセス先の記載がなかったら終了。
+    If Target.Value = "" Then
+        Exit Sub
+    Else
+        pHOST = Target.Value
+    End If
+    
+    Target.Interior.ColorIndex = 6
+    
+    ' 併せて 2 列目に入力があれば、ユーザIDだと信じ込む。
+    If Cells(Target.Row, nUSER) <> "" Then
+        pUSER = Cells(Target.Row, nUSER)
+    End If
+    
+Else
+    Target.Interior.ColorIndex = xlNone
+    Exit Sub
+End If
+
+Cancel = True
+Set FSO = CreateObject("Scripting.FileSystemObject")
+    ' 上書き     : する = true, しない = false (存在したらエラー)
+    ' 文字コード : Unicode(UTF) = true, ASCII = false
+    Set TXT = FSO.CreateTextFile(pFILEPATH, True, False)
+        TXT.WriteLine ("")
+        TXT.WriteLine ("username = '" & pUSER & "'")
+        TXT.WriteLine ("hostname = '" & pHOST & "'")
+        TXT.WriteLine ("")
+        TXT.WriteLine (";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;")
+        TXT.WriteLine ("")
+        TXT.WriteLine ("msg = 'Enter password for user '")
+        TXT.WriteLine ("strconcat msg username")
+        TXT.WriteLine ("passwordbox msg 'Get password'")
+        TXT.WriteLine ("")
+        TXT.WriteLine ("msg = hostname")
+        TXT.WriteLine ("strconcat msg ':22 /ssh /auth=password /user='")
+        TXT.WriteLine ("strconcat msg username")
+        TXT.WriteLine ("strconcat msg ' /passwd='")
+        TXT.WriteLine ("strconcat msg inputstr")
+        TXT.WriteLine ("")
+        TXT.WriteLine ("connect msg")
+        TXT.Close
+    Set TXT = Nothing
+
+    ' 作成したマクロを利用して、対象ホストにアクセス
+
+    pPID = Shell(pTTMACROPATH & " " & pFILEPATH)
+
+Set FSO = Nothing
+
+End Sub
+
+-----sample2-----
+Option Explicit
+ 
+Sub CreateTTL()
+ 
+Dim FileNumber As Integer
+Dim FilePath As String
+Dim TargetServer As String
+Dim TargetPort As String
+ 
+FileNumber = 1
+FilePath = ”<xxx>\test.ttl”
+TargetServer = Cells(4, 4).Value  ' サーバー名を入れるセルを指定
+TargetPort = Cells(4, 5).Value  ' ポート番号を入れるセルを指定
+ 
+' ttl作成
+ 
+Open FilePath For Output As #FileNumber
+ 
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”HOST = '” ;TargetServer; ”'”
+Print #FileNumber, ”PORT = '” ;TargetPort; ”'”
+Print #FileNumber, ”LogPath = '<xxx>'”
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ””
+Print #FileNumber, ””
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”接続”
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”strconcat target HOST”
+Print #FileNumber, ”strconcat target ':'”
+Print #FileNumber, ”strconcat target PORT”
+Print #FileNumber, ”strconcat target ' /nossh'”
+Print #FileNumber, ””
+Print #FileNumber, ”サーバへの接続”
+Print #FileNumber, ”connect target”
+Print #FileNumber, ””
+Print #FileNumber, ””
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”ログ取得開始”
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”ファイル名設定”
+Print #FileNumber, ”gettime logname '%Y%m%d_%H%M%S%h.log'”
+Print #FileNumber, ”ログ出力先設定”
+Print #FileNumber, ”fullpath = LogPath”
+Print #FileNumber, ”strconcat fullpath logname”
+Print #FileNumber, ”ログ取得開始”
+Print #FileNumber, ”logopen fullpath 0 1”
+Print #FileNumber, ””
+Print #FileNumber, ””
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”ログイン後処理”
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”wait '$'”
+Print #FileNumber, ”sendln 'uname -n'”
+Print #FileNumber, ””
+Print #FileNumber, ””
+Print #FileNumber, ”ここに色々処理記述”
+Print #FileNumber, ””
+Print #FileNumber, ””
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ”ログアウト処理”
+Print #FileNumber, ”==========================================”
+Print #FileNumber, ””
+Print #FileNumber, ”wait '$'”
+Print #FileNumber, ”sendln 'exit'”
+Print #FileNumber, ””
+Print #FileNumber, ”logclose”
+Print #FileNumber, ”
+ 
+Close #FileNumber1
+ 
+' ttl実行
+Shell ”<xxx>\ttermpro.exe /M=<xxx>\test.ttl”
+ 
+End Sub
+Sub LogJudge()
+ 
+Dim LogFile As String
+Dim FileNumber2 As Integer
+Dim Line As String
+ 
+LogFile = ”<xxx>\log.txt”
+FileNumber2 = 2
+ 
+Open LogFile For Input As FileNumber2
+Input #FileNumber2, Line
+If Line Like ”*flag*” Then
+Cells(12, 4).Value = ”○”  ' ログ評価結果を示すセルを指定
+Else
+Cells(12, 4).Value = ”×”  ' ログ評価結果を示すセルを指定
+End If
+ 
+Close #FileNumber2
+ 
+End Sub
